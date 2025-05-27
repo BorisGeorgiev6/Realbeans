@@ -68,7 +68,9 @@ describe('E-commerce Store Tests', () => {
       });
       cy.log('Initial prices:', initialPrices);
       cy.get('select#SortBy, select[name="sort_by"]').first().select('price-ascending', { force: true });
-      cy.wait('@graphql', { timeout: 10000 }).catch(() => {
+      cy.wait('@graphql', { timeout: 10000, requestTimeout: 10000, responseTimeout: 10000 }).then((interception) => {
+        cy.log('GraphQL request intercepted successfully');
+      }, () => {
         cy.log('GraphQL request for sorting not found, proceeding with element check');
         cy.get('.price__regular .price-item', { timeout: 10000 }).should('be.visible');
       });
