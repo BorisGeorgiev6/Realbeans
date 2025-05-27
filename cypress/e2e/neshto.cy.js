@@ -47,7 +47,6 @@ describe('E-commerce Store Tests', () => {
   });
 
   it('Sorting products by price changes their order', () => {
-    cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(`${STORE_URL}/collections/all`);
     cy.get('body').then(($body) => {
       if ($body.find('#shopify-pc__banner__btn-accept').length > 0) {
@@ -68,12 +67,7 @@ describe('E-commerce Store Tests', () => {
       });
       cy.log('Initial prices:', initialPrices);
       cy.get('select#SortBy, select[name="sort_by"]').first().select('price-ascending', { force: true });
-      cy.wait('@graphql', { timeout: 10000, requestTimeout: 10000, responseTimeout: 10000 }).then((interception) => {
-        cy.log('GraphQL request intercepted successfully');
-      }, () => {
-        cy.log('GraphQL request for sorting not found, proceeding with element check');
-        cy.get('.price__regular .price-item', { timeout: 10000 }).should('be.visible');
-      });
+      cy.get('.price__regular .price-item', { timeout: 10000 }).should('be.visible'); // Wait for sorted prices to load
       cy.get('.price__regular .price-item').as('sortedPrices');
       cy.get('@sortedPrices').should(($els) => {
         const prices = Array.from($els).map((el) => {
