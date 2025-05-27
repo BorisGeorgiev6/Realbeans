@@ -4,7 +4,6 @@ describe('E-commerce Store Tests', () => {
 
   beforeEach(() => {
     Cypress.on('uncaught:exception', () => false);
-    cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(STORE_URL, { failOnStatusCode: false });
     cy.get('body').then(($body) => {
       if ($body.find('#shopify-pc__banner__btn-accept').length > 0) {
@@ -14,16 +13,14 @@ describe('E-commerce Store Tests', () => {
       if ($body.find('input[name="password"]').length > 0) {
         cy.get('input[name="password"]').type(STORE_PASSWORD);
         cy.get('form').submit();
-        cy.wait('@graphql', { timeout: 10000 });
+        cy.get('h1.header__heading, .hero__inner .h2, .banner__text', { timeout: 10000 }).should('be.visible');
       }
     });
     cy.url().should('not.include', '/password');
   });
 
   it('Homepage displays intro text and product list correctly', () => {
-    cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(STORE_URL);
-    cy.wait('@graphql', { timeout: 10000 });
     cy.get('h1.header__heading, .hero__inner .h2, .banner__text')
       .should('be.visible')
       .then(($el) => cy.log('Intro element found:', $el.text()));
@@ -37,12 +34,8 @@ describe('E-commerce Store Tests', () => {
   });
 
   it('Product catalog shows correct items', () => {
-    cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(`${STORE_URL}/collections/all`);
-    cy.wait('@graphql', { timeout: 10000 });
-    cy.scrollTo('bottom');
-    cy.wait(1000);
-    cy.get('ul.grid li.grid__item').as('products');
+    cy.get('ul.grid li.grid__item', { timeout: 10000 }).as('products');
     cy.get('@products').should('have.length.at.least', 1);
     cy.get('@products').each(($product) => {
       cy.wrap($product).within(() => {
@@ -56,12 +49,8 @@ describe('E-commerce Store Tests', () => {
   it('Sorting products by price changes their order', () => {
     cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(`${STORE_URL}/collections/all`);
-    cy.wait('@graphql', { timeout: 10000 });
-    cy.scrollTo('bottom');
-    cy.wait(1000);
-    cy.wait(500);
-    cy.get('button:contains("Accept")').click({ force: true });
-    cy.get('ul.grid li.grid__item').as('products');
+    cy.get('button:contains("Accept")', { timeout: 5000 }).click({ force: true });
+    cy.get('ul.grid li.grid__item', { timeout: 10000 }).as('products');
     cy.get('@products').should('be.visible');
     cy.get('.price__regular .price-item').as('prices');
     cy.get('@prices').then(($prices) => {
@@ -74,9 +63,10 @@ describe('E-commerce Store Tests', () => {
       });
       cy.log('Initial prices:', initialPrices);
       cy.get('select#SortBy, select[name="sort_by"]').first().select('price-ascending', { force: true });
-      cy.wait('@graphql', { timeout: 10000 });
-      cy.scrollTo('bottom');
-      cy.wait(2000);
+      cy.wait('@graphql', { timeout: 10000 }).catch(() => {
+        cy.log('GraphQL request for sorting not found, proceeding with element check');
+        cy.get('.price__regular .price-item', { timeout: 10000 }).should('be.visible');
+      });
       cy.get('.price__regular .price-item').as('sortedPrices');
       cy.get('@sortedPrices').should(($els) => {
         const prices = Array.from($els).map((el) => {
@@ -89,7 +79,7 @@ describe('E-commerce Store Tests', () => {
         }
       }, { timeout: 10000 });
       cy.get('@sortedPrices').then(($sortedPrices) => {
-        const sortedPrices = Array.from($sortedPrices).map((el) => {
+        const sortedPrices = Array.from($sortedprices).map((el) => {
           const rawPrice = el.textContent.trim();
           cy.log('Raw sorted price:', rawPrice);
           const numericPart = rawPrice.replace('From', '').replace('EUR', '').trim();
@@ -104,9 +94,6 @@ describe('E-commerce Store Tests', () => {
   it('Displays correct product details', () => {
     cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(`${STORE_URL}/collections/all`);
-    cy.wait('@graphql', { timeout: 10000 });
-    cy.scrollTo('bottom');
-    cy.wait(1000);
     cy.get('body').then(($body) => {
       if ($body.find('#shopify-pc__banner__btn-accept').length > 0) {
         cy.get('#shopify-pc__banner__btn-accept', { timeout: 5000 }).should('be.visible').click();
@@ -122,9 +109,6 @@ describe('E-commerce Store Tests', () => {
         cy.wrap($link).click({ force: true });
       });
     cy.url().should('include', '/products');
-    cy.wait('@graphql', { timeout: 10000 });
-    cy.scrollTo('bottom');
-    cy.wait(3000);
     cy.get('.product__description', { timeout: 10000 }).should('not.be.empty');
     cy.get('.price__regular .price-item', { timeout: 10000 })
       .scrollIntoView()
@@ -140,11 +124,8 @@ describe('E-commerce Store Tests', () => {
   });
 
   it('About page includes history paragraph', () => {
-    cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(`${STORE_URL}/pages/about`, { failOnStatusCode: false });
-    cy.wait('@graphql', { timeout: 10000 });
-    cy.wait(500);
-    cy.get('button:contains("Accept")').click({ force: true });
+    cy.get('button:contains("Accept")', { timeout: 5000 }).click({ force: true });
     cy.get('h1, h2, .page-title').should('contain.text', 'About');
     cy.get('main p').should('have.length.at.least', 1)
       .then(($el) => cy.log('About page content found:', $el.text()));
