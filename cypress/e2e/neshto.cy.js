@@ -49,7 +49,12 @@ describe('E-commerce Store Tests', () => {
   it('Sorting products by price changes their order', () => {
     cy.intercept('POST', '/api/2025-04/graphql.json').as('graphql');
     cy.visit(`${STORE_URL}/collections/all`);
-    cy.get('button:contains("Accept")', { timeout: 5000 }).click({ force: true });
+    cy.get('body').then(($body) => {
+      if ($body.find('#shopify-pc__banner__btn-accept').length > 0) {
+        cy.get('#shopify-pc__banner__btn-accept', { timeout: 5000 }).should('be.visible').click();
+        cy.wait(3000);
+      }
+    });
     cy.get('ul.grid li.grid__item', { timeout: 10000 }).as('products');
     cy.get('@products').should('be.visible');
     cy.get('.price__regular .price-item').as('prices');
@@ -79,7 +84,7 @@ describe('E-commerce Store Tests', () => {
         }
       }, { timeout: 10000 });
       cy.get('@sortedPrices').then(($sortedPrices) => {
-        const sortedPrices = Array.from($sortedprices).map((el) => {
+        const sortedPrices = Array.from($sortedPrices).map((el) => {
           const rawPrice = el.textContent.trim();
           cy.log('Raw sorted price:', rawPrice);
           const numericPart = rawPrice.replace('From', '').replace('EUR', '').trim();
@@ -125,7 +130,12 @@ describe('E-commerce Store Tests', () => {
 
   it('About page includes history paragraph', () => {
     cy.visit(`${STORE_URL}/pages/about`, { failOnStatusCode: false });
-    cy.get('button:contains("Accept")', { timeout: 5000 }).click({ force: true });
+    cy.get('body').then(($body) => {
+      if ($body.find('#shopify-pc__banner__btn-accept').length > 0) {
+        cy.get('#shopify-pc__banner__btn-accept', { timeout: 5000 }).should('be.visible').click();
+        cy.wait(3000);
+      }
+    });
     cy.get('h1, h2, .page-title').should('contain.text', 'About');
     cy.get('main p').should('have.length.at.least', 1)
       .then(($el) => cy.log('About page content found:', $el.text()));
