@@ -1,0 +1,161 @@
+describe('E-commerce Store Tests', () => {
+  const STORE_URL = 'https://r0972798-realbeans.myshopify.com';
+  const STORE_PASSWORD = 'daobeu';
+
+  beforeEach(() => {
+    // Ignore uncaught exceptions to handle theme JS errors
+    Cypress.on('uncaught:exception', () => false);
+
+    // Wait for page load via network request
+    cy.intercept('POST', '/api/unstable/graphql.json').as('graphql');
+    cy.visit(STORE_URL, { failOnStatusCode: false });
+    cy.get('body').then(($body) => {
+      if ($body.find('input[name="password"]').length > 0) {
+        cy.get('input[name="password"]').type(STORE_PASSWORD);
+        cy.get('form').submit();
+        cy.wait('@graphql'); // Wait for page load
+      }
+    });
+    cy.url().should('not.include', '/password');
+  });
+
+  it('Homepage displays intro text and product list correctly', () => {
+    cy.intercept('POST', '/api/unstable/graphql.json').as('graphql');
+    cy.visit(STORE_URL);
+    cy.wait('@graphql');
+    // Check intro text
+    cy.get('h1.header__heading, .hero__inner .h2, .banner__text')
+      .should('be.visible')
+      .then(($el) => cy.log('Intro element found:', $el.text()));
+
+    // Check product list
+    cy.get('ul.grid li.grid__item').as('products'); // Dawn theme selector
+    cy.get('@products').should('have.length.at.least', 1);
+    cy.get('@products').first().within(() => {
+      cy.get('img').should('be.visible');
+      cy.get('.price__regular .price-item').should('be.visible');
+      cy.get('.card__heading').should('be.visible');
+    });
+  });
+
+  it('Product catalog shows correct items', () => {
+    cy.intercept('POST', '/api/unstable/graphql.json').as('graphql');
+    cy.visit(`${STORE_URL}/collections/all`);
+    cy.wait('@graphql');
+    cy.scrollTo('bottom'); // Ensure the entire page is loaded
+    cy.wait(1000); // Wait for dynamic content
+    // Verify products are displayed
+    cy.get('ul.grid li.grid__item').as('products'); // Dawn theme selector
+    cy.get('@products').should('have.length.at.least', 1);
+    cy.get('@products').each(($product) => {
+      cy.wrap($product).within(() => {
+        cy.get('img').should('be.visible');
+        cy.get('.price__regular .price-item').should('be.visible');
+        cy.get('.card__heading').should('be.visible');
+      });
+    });
+  });
+
+  it('Sorting products by price changes their order', () => {
+    cy.intercept('POST', '/api/unstable/graphql.json').as('graphql');
+    cy.visit(`${STORE_URL}/collections/all`);
+    cy.wait('@graphql');
+    cy.scrollTo('bottom'); // Ensure the entire page is loaded
+    cy.wait(1000); // Wait for dynamic content
+    // Accept cookie popup
+    cy.wait(500); // Wait for popup to render
+    cy.get('button:contains("Accept")').click({ force: true });
+    // Ensure products are loaded
+    cy.get('ul.grid li.grid__item').as('products'); // Dawn theme selector
+    cy.get('@products').should('be.visible');
+
+    // Get initial product prices
+    cy.get('.price__regular .price-item').as('prices'); // Dawn theme selector
+    cy.get('@prices').then(($prices) => {
+      const initialPrices = Array.from($prices).map((el) => {
+        const rawPrice = el.textContent.trim(); // e.g., "From €55,00 EUR"
+        cy.log('Raw price:', rawPrice);
+        const numericPart = rawPrice.replace('From', '').replace('EUR', '').trim(); // Remove "From" and "EUR"
+        const priceValue = parseFloat(numericPart.replace('€', '').replace(',', '.')); // Convert "€55,00" to "55.00"
+        return priceValue;
+      });
+      cy.log('Initial prices:', initialPrices);
+
+      // Sort by price
+      cy.get('select#SortBy, select[name="sort_by"]').first().select('price-ascending', { force: true });
+      cy.wait('@graphql'); // Wait for sort to apply
+      cy.scrollTo('bottom'); // Ensure sorted products are loaded
+      cy.wait(2000); // Increased wait for sorting to complete
+
+      // Wait for the prices to be in ascending order
+      cy.get('.price__regular .price-item').as('sortedPrices'); // Re-fetch to avoid DOM detachment
+      cy.get('@sortedPrices').should(($els) => {
+        const prices = Array.from($els).map((el) => {
+          const rawPrice = el.textContent.trim();
+          const numericPart = rawPrice.replace('From', '').replace('EUR', '').trim();
+          return parseFloat(numericPart.replace('€', '').replace(',', '.'));
+        });
+        for (let i = 0; i < prices.length - 1; i++) {
+          expect(prices[i]).to.be.at.most(prices[i + 1], `Price at index ${i} (${prices[i]}) should be <= index ${i + 1} (${prices[i + 1]})`);
+        }
+      }, { timeout: 10000 }); // Increased timeout for sorting to apply
+
+      // Log sorted prices for debugging
+      cy.get('@sortedPrices').then(($sortedPrices) => {
+        const sortedPrices = Array.from($sortedPrices).map((el) => {
+          const rawPrice = el.textContent.trim();
+          cy.log('Raw sorted price:', rawPrice);
+          const numericPart = rawPrice.replace('From', '').replace('EUR', '').trim();
+          return parseFloat(numericPart.replace('€', '').replace(',', '.'));
+        });
+        cy.log('Sorted prices:', sortedPrices);
+      });
+
+      cy.url().should('include', 'sort_by=price-ascending');
+    });
+  });
+
+  it('Product detail pages display correct descriptions, prices, and image names', () => {
+    cy.intercept('POST', '/api/unstable/graphql.json').as('graphql');
+    cy.visit(`${STORE_URL}/collections/all`);
+    cy.wait('@graphql');
+    cy.scrollTo('bottom'); // Ensure the entire page is loaded
+    cy.wait(1000); // Wait for dynamic content
+    // Accept cookie popup
+    cy.wait(500); // Wait for popup to render
+    cy.get('button:contains("Accept")').click({ force: true });
+    // Navigate to first product
+    cy.get('ul.grid li.grid__item').as('products'); // Dawn theme selector
+    cy.get('@products').first().find('.card__heading a').first().click({ force: true }); // Force click due to visibility issue
+    cy.url().should('include', '/products');
+    cy.wait('@graphql');
+    cy.scrollTo('bottom'); // Ensure the entire product page is loaded
+    cy.wait(2000); // Increased wait for dynamic content
+
+    // Verify details
+    cy.get('.product__title, h1').should('be.visible');
+    cy.get('.price__regular .price-item').scrollIntoView().should('be.visible')
+      .invoke('text').then((priceText) => {
+        cy.log('Product page price:', priceText);
+        expect(priceText).to.match(/€?[0-9]+,[0-9]{2}/); // Match "€55,00" or "55,00"
+      });
+    cy.get('.product__description').should('not.be.empty');
+    cy.get('.product__media img').should('have.attr', 'src').and('not.be.empty');
+  });
+
+  it('About page includes history paragraph', () => {
+    cy.intercept('POST', '/api/unstable/graphql.json').as('graphql');
+    cy.visit(`${STORE_URL}/pages/about`, { failOnStatusCode: false }); // Correct URL
+    cy.wait('@graphql');
+    // Accept cookie popup
+    cy.wait(500); // Wait for popup to render
+    cy.get('button:contains("Accept")').click({ force: true });
+    // Verify page and history content
+    cy.get('h1, h2, .page-title').should('contain.text', 'About');
+    cy.get('main p').should('have.length.at.least', 1)
+      .then(($el) => cy.log('About page content found:', $el.text()));
+    cy.get('main').invoke('text').then((text) => {
+      expect(text.length).to.be.greaterThan(50);
+    });
+  });
+});
